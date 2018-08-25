@@ -1,6 +1,6 @@
 # defined
 
-A plugin/API/code management system that under 5k.
+A plugin/API/code management system thats under 5k (min).
 
 
 ## Why use defined?
