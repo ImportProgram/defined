@@ -136,7 +136,7 @@ class Manager extends EventEmitter {
         this.defined = {}
         this.pass = false
         this.moduleList = []
-        this.transform = (c, n) => {return `//# sourceURL=${n.toUpperCase()}\n${c}`}
+        this.transform = (c, n) => { return `//# sourceURL=${n.toUpperCase()}\n${c}` }
     }
     /**
      * SetDefinedID - Sets the DEFINED namespace used in a plugin/api
@@ -191,7 +191,7 @@ class Manager extends EventEmitter {
                                 //Load the module (but do it as TEXT not as a require)
                                 require('fs').readFile(main, 'utf8', (err, data) => {
                                     if (err) { console.log("[Defined] Cannot load " + json.main + "!") }
-                                    else {self.run(data, section, json.name, allowRequire)}
+                                    else { self.run(data, section, json.name, allowRequire) }
                                 });
                             } else {
                                 console.log("[Loader] Has no 'main' file?")
@@ -332,7 +332,7 @@ class Manager extends EventEmitter {
             let z = ""
             //List all plugins loaded (on ONE line)
             for (let m in this.moduleList) {
-                z = `${z}${ this.moduleList[m].toUpperCase()} `
+                z = `${z}${this.moduleList[m].toUpperCase()} `
             }
             log.log(`$DLoading ( ${z})`)
             this.emit('mount-imports'); //Mount all GLOBAL imports
@@ -363,10 +363,10 @@ class Manager extends EventEmitter {
                     if (this.defined[_section][_name]) {
                         let local = {}
                         let me = this
-                        for (let service in this.defined[_section][_name].services.GLOBAL)  {
+                        for (let service in this.defined[_section][_name].services.GLOBAL) {
 
                             //Normally the function is based on the REGISTER part of the module, but by slicing the arguments
-                            //We can then actually make are own additonal arguments (so name of plugin) to be applied to the REGISTER
+                            //We can then actually make are own additional arguments (so name of plugin) to be applied to the REGISTER
                             //Its not perfect but it works
                             local[service] = function () {
                                 var args = Array.prototype.slice.call(arguments);
@@ -403,8 +403,27 @@ class Manager extends EventEmitter {
                         customImports[_section][_name] = {}
                         for (let register in customRegisters) {
                             let id = customRegisters[register]
+                            //Attempt the idea of using APPLY for custom registers. Now always used but could be a good idea, if say they ALSO wanted to know
+                            //What module was calling them, or not.
                             try {
-                                customImports[_section][_name][id] = this.defined[_section][_name].services[id]
+                                let local = {}
+                                let me = this
+                                //Use ID for the NAMESPACE of what SERVICE is being called on
+                                for (let service in this.defined[_section][_name].services[id]) {
+                                    //Normally the function is based on the REGISTER part of the module, but by slicing the arguments
+                                    //We can then actually make are own additional arguments (so name of plugin) to be applied to the REGISTER
+                                    //Its not perfect but it works (better then v1.0, where it was using a stack trace to find the function name)
+                                    local[service] = function () {
+                                        var args = Array.prototype.slice.call(arguments);
+                                        args.unshift(name);
+                                        let a = me.defined[_section][_name].services[id][service].apply(this, args);
+                                        if (a) {
+                                            return a
+                                        }
+                                    }
+                                }
+                                customImports[_section][_name][id] = local
+
                             } catch (e) {
                                 console.log("[DML] Doesn't Support Custom Register (" + _section + ":" + _name + ")")
                             }
@@ -428,6 +447,6 @@ function PluginManager() { }
 PluginManager.prototype.addDefined = function (id, path, allowRequire = null, customRegisters) { return m.addDefined.call(this, id, path, allowRequire, customRegisters); }
 PluginManager.prototype.onAppReady = function (callback) { m.appReady(callback) }
 PluginManager.prototype.mountAll = function () { m.checkMounting() }
-PluginManager.prototype.transformCode = function (code) { m.transformCode(code)}
+PluginManager.prototype.transformCode = function (code) { m.transformCode(code) }
 PluginManager.prototype.setDefinedID = function (id) { m.setDefinedID(id) }
 module.exports = PluginManager;
