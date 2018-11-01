@@ -326,9 +326,11 @@ class Manager extends EventEmitter {
                 } catch (e) { }
             }
         }
+        //Check if all plugins have loaded. Only run this onece
         if (pass && !this.pass) {
             this.pass = true
             let z = ""
+            //List all plugins loaded (on ONE line)
             for (let m in this.moduleList) {
                 z = `${z}${ this.moduleList[m].toUpperCase()} `
             }
@@ -348,7 +350,9 @@ class Manager extends EventEmitter {
         if (this.defined[section][name].package.consumes) {
             let consumes = this.defined[section][name].package.consumes
             let imports = {}
+            //What ye cosuming? (from package.json)
             for (let value in consumes) {
+                //Module and its SECTION:NAME
                 let mod = consumes[value].split(":")
                 let _section = mod[0]
                 let _name = mod[1]
@@ -360,6 +364,10 @@ class Manager extends EventEmitter {
                         let local = {}
                         let me = this
                         for (let service in this.defined[_section][_name].services.GLOBAL)  {
+
+                            //Normally the function is based on the REGISTER part of the module, but by slicing the arguments
+                            //We can then actually make are own additonal arguments (so name of plugin) to be applied to the REGISTER
+                            //Its not perfect but it works
                             local[service] = function () {
                                 var args = Array.prototype.slice.call(arguments);
                                 args.unshift(name);
@@ -369,6 +377,7 @@ class Manager extends EventEmitter {
                                 }
                             }
                         }
+                        //Save the imports from the local "function" (I mean its local and a function, but not the DIRECT function being called)
                         imports[_section][_name] = local
                     }
                 }
