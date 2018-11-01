@@ -7,11 +7,12 @@
 
 
 require("amd-loader");
+//var { transform } = require("babel-core");
 var EventEmitter = require('events').EventEmitter;
 const startTime = process.hrtime()
 class Logging {
     constructor() {
-        this.prefix = this.color("$3 > $f")
+        this.prefix = this.color("$3 Observo $f|")
     }
     /**
      * Color - Colors text using $ as the break point followed by a color code
@@ -21,25 +22,25 @@ class Logging {
         let paint = (color, text) => {
             switch (color) {
                 case '0'://black
-                    text = '\x1B[30m' + text; break;
+                    text = '' + text; break;
                 case '4': //red
-                    text = '\x1B[31m' + text; break;
+                    text = '' + text; break;
                 case '2': //green
-                    text = '\x1B[32m' + text; break;
+                    text = '' + text; break;
                 case 'E': //yellow
-                    text = '\x1B[33m' + text; break;
+                    text = '' + text; break;
                 case '1': //blue
-                    text = '\x1B[34m' + text; break;
+                    text = '' + text; break;
                 case 'D': //magenta
-                    text = '\x1B[35m' + text; break;
+                    text = '' + text; break;
                 case '3': //cyan
-                    text = '\x1B[36m' + text; break;
+                    text = '' + text; break;
                 case 'f': //white
-                    text = '\x1B[37m' + text; break;
+                    text = '' + text; break;
                 default:
                     text = color + text; break;
             }
-            return text + '\x1B[39m' + '\x1b[0m';
+            return text
         }
         let output = ""
         let painting = false
@@ -134,6 +135,8 @@ class Manager extends EventEmitter {
         self.id = "defined"
         this.defined = {}
         this.pass = false
+        this.moduleList = []
+        this.transform = (c, n) => {return `//# sourceURL=${n.toUpperCase()}\n${c}`}
     }
     /**
      * SetDefinedID - Sets the DEFINED namespace used in a plugin/api
@@ -148,7 +151,7 @@ class Manager extends EventEmitter {
      */
     appReady(callback) {
         this.on('app-ready', () => {
-            log.info("Succesfully loaded in: $f" +  ((process.hrtime(startTime)[0] * 1000) + (process.hrtime(startTime)[1] / 1000000)).toFixed(3) + "ms")
+            log.info("Succesfully loaded in: $f" + ((process.hrtime(startTime)[0] * 1000) + (process.hrtime(startTime)[1] / 1000000)).toFixed(3) + "ms")
             callback(log)
         });
     }
@@ -172,7 +175,7 @@ class Manager extends EventEmitter {
                 let f = apis[file]
                 //Use AMD-LOADER for async module loading (faster)
                 define(function (require, exports, module) {
-                    f = f.replace(/\\/g, "/");            
+                    f = f.replace(/\\/g, "/");
                     let json = require(f) //Load the package.json
                     if (json.name && json.version) {
                         if (!self.defined[section][json.name]) {
@@ -181,16 +184,14 @@ class Manager extends EventEmitter {
                             self.defined[section][json.name].package = json
                             self.defined[section][json.name].registered = false
                             self.defined[section][json.name].services = {}
-                            log.log("$DNEW MODULE: " + json.name)
                             let dir = splitAt(f.lastIndexOf("/"))(f)[0]
                             if (json.main) {
-
+                                self.moduleList.push(json.name)
                                 let main = dir + "/" + json.main
                                 //Load the module (but do it as TEXT not as a require)
                                 require('fs').readFile(main, 'utf8', (err, data) => {
                                     if (err) { console.log("[Defined] Cannot load " + json.main + "!") }
-                                    //Now run the code
-                                    self.run(data, section, json.name, allowRequire) 
+                                    else {self.run(data, section, json.name, allowRequire)}
                                 });
                             } else {
                                 console.log("[Loader] Has no 'main' file?")
@@ -199,7 +200,7 @@ class Manager extends EventEmitter {
                     }
 
                 });
-                
+
             }
             return self.defined[section]
         }
@@ -266,7 +267,7 @@ class Manager extends EventEmitter {
             register: (id, services) => {
                 this.defined[section][name].services = services
                 this.defined[section][name].registered = true
-              
+
                 this.checkMounting()
             },
             //BUILD A CUSTOM MOUNT
@@ -278,27 +279,38 @@ class Manager extends EventEmitter {
             },
             //BUILT A NORMAL MOUNT (with callback naming)
             onMount: (callback) => {
-                const nameFunction = function (fn, name) {
-                    return Object.defineProperty(fn, 'name', {value: name, configurable: true});
-                  };
+                /*const nameFunction = function (fn, name) {
+                    return Object.defineProperty(fn, 'name', { value: name, configurable: true });
+                };*/
                 this.on('mount-imports', () => {
                     let data = this.getGlobalServices(section, name)
-                    callback = nameFunction(callback, name)
+                    //callback = nameFunction(callback, name)
                     callback(data)
                 });
             },
-            //GET PLUGINS PACKAGE (can be use for settings, etc)
-            getPackage: () => {
-                return this.defined[id][name].package
+            //GET ALL DEFINED PACKAGE (can be use for settings, etc)
+            getDefined: () => {
+                let local = {}
+                for (let _section in this.defined) { //Loop them
+                    local[_section] = {} //Get object of module 
+                    for (let _name in this.defined[_section]) {
+                        if (_name != "__customRegisters") { //Check to see if __customRegisters was for loop, if so ignore it
+                            local[_section][_name] = {}
+                            local[_section][_name].package = this.defined[_section][_name].package
+                        }
+                    }
+                }
+                return local
             }
         }
         //Grab the GLOBAL ID (whatever has be set), and use it as the MODULE NAMSPACE (keep in mind the word "defined" will still work anywhere)
         let id = this.id
         let newCode = `module.exports = function(require, console, ${id}, log) { ${code} }`;
         self = null
+        newCode = this.transform(newCode, name)
         let launchCode = eval(newCode);
         //Run the code
-        launchCode(customRequire, customConsole, defined, null);
+        launchCode(customRequire, console, defined, null);
     }
     /**
      * CheckMounting - Checks to see if all plugins have mounted registers
@@ -311,11 +323,16 @@ class Manager extends EventEmitter {
                     if (this.defined[section][mod].registered == false) {
                         pass = false
                     }
-                } catch (e) {}
+                } catch (e) { }
             }
         }
         if (pass && !this.pass) {
             this.pass = true
+            let z = ""
+            for (let m in this.moduleList) {
+                z = `${z}${ this.moduleList[m].toUpperCase()} `
+            }
+            log.log(`$DLoading ( ${z})`)
             this.emit('mount-imports'); //Mount all GLOBAL imports
             this.emit('mount-custom'); //Mount any CUSTOM imports
             this.emit('app-ready') //Mount the AppReady event.
@@ -336,9 +353,23 @@ class Manager extends EventEmitter {
                 let _section = mod[0]
                 let _name = mod[1]
                 if (this.defined[_section]) {
-                    imports[_section] = {}
+                    if (imports[_section] == null) {
+                        imports[_section] = {}
+                    }
                     if (this.defined[_section][_name]) {
-                        imports[_section][_name] = this.defined[_section][_name].services.GLOBAL
+                        let local = {}
+                        let me = this
+                        for (let service in this.defined[_section][_name].services.GLOBAL)  {
+                            local[service] = function () {
+                                var args = Array.prototype.slice.call(arguments);
+                                args.unshift(name);
+                                let a = me.defined[_section][_name].services.GLOBAL[service].apply(this, args);
+                                if (a) {
+                                    return a
+                                }
+                            }
+                        }
+                        imports[_section][_name] = local
                     }
                 }
             }
@@ -377,13 +408,17 @@ class Manager extends EventEmitter {
         }
         return null
     }
+    transformCode(callback) {
+        this.transform = callback
+    }
 }
 
 let m = new Manager()
 
-function PluginManager() {}
-PluginManager.prototype.addDefined = function (id, path, allowRequire = null, customRegisters) {return m.addDefined.call(this, id, path, allowRequire, customRegisters);}
-PluginManager.prototype.onAppReady = function (callback) {m.appReady(callback)}
-PluginManager.prototype.mountAll = function () {m.checkMounting()}
-PluginManager.prototype.setDefinedID = function (id) {m.setDefinedID(id)}
-module.exports= PluginManager;
+function PluginManager() { }
+PluginManager.prototype.addDefined = function (id, path, allowRequire = null, customRegisters) { return m.addDefined.call(this, id, path, allowRequire, customRegisters); }
+PluginManager.prototype.onAppReady = function (callback) { m.appReady(callback) }
+PluginManager.prototype.mountAll = function () { m.checkMounting() }
+PluginManager.prototype.transformCode = function (code) { m.transformCode(code)}
+PluginManager.prototype.setDefinedID = function (id) { m.setDefinedID(id) }
+module.exports = PluginManager;
