@@ -8,3 +8,4 @@ Defined was created because how third party plugins can be executed. I didn't wa
 
 ## Using it
 - Please take a look at the example, its easy to understand that way.
+
