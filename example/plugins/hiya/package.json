@@ -1,0 +1,7 @@
+{
+    "name": "hiya",
+    "version": "1.0.0",
+    "main": "hiya.js",
+    "author": "ImportProgram",
+    "consumes": ["api:example"]
+}
